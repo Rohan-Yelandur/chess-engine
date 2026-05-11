@@ -67,6 +67,7 @@ class Board {
     void print ();
     void reset ();
     void generate_pawn_moves (std::vector<Move>* moves);
+    void generate_knight_moves (std::vector<Move>* moves);
     void make_move (Move move);
     bitboard get_empty_squares ();
     bitboard get_black_pieces ();

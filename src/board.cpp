@@ -156,8 +156,8 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Left captures
-    bitboard non_a_rank = (bitboard)0xFEFEFEFEFEFEFEFE;
-    bitboard left_captures = ((bitboards[WHITE_PAWNS] & non_a_rank) << 7) & black_pieces;
+    bitboard non_a_file = (bitboard)0xFEFEFEFEFEFEFEFE;
+    bitboard left_captures = ((bitboards[WHITE_PAWNS] & non_a_file) << 7) & black_pieces;
     while (left_captures > 0) {
       bitboard least_significant_bit = left_captures & -left_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -178,8 +178,8 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Right captures
-    bitboard non_h_rank = (bitboard)0x7F7F7F7F7F7F7F7F;
-    bitboard right_captures = ((bitboards[WHITE_PAWNS] & non_h_rank) << 9) & black_pieces;
+    bitboard non_h_file = (bitboard)0x7F7F7F7F7F7F7F7F;
+    bitboard right_captures = ((bitboards[WHITE_PAWNS] & non_h_file) << 9) & black_pieces;
     while (right_captures > 0) {
       bitboard least_significant_bit = right_captures & -right_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -242,8 +242,8 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Left captures - Left and right are from the perspective of white, not black
-    bitboard non_a_rank = (bitboard)0xFEFEFEFEFEFEFEFE;
-    bitboard left_captures = ((bitboards[BLACK_PAWNS] & non_a_rank) >> 7) & white_pieces;
+    bitboard non_a_file = (bitboard)0xFEFEFEFEFEFEFEFE;
+    bitboard left_captures = ((bitboards[BLACK_PAWNS] & non_a_file) >> 7) & white_pieces;
     while (left_captures > 0) {
       bitboard least_significant_bit = left_captures & -left_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -264,8 +264,8 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Right captures
-    bitboard non_h_rank = (bitboard)0x7F7F7F7F7F7F7F7F;
-    bitboard right_captures = ((bitboards[BLACK_PAWNS] & non_h_rank) >> 9) & white_pieces;
+    bitboard non_h_file = (bitboard)0x7F7F7F7F7F7F7F7F;
+    bitboard right_captures = ((bitboards[BLACK_PAWNS] & non_h_file) >> 9) & white_pieces;
     while (right_captures > 0) {
       bitboard least_significant_bit = right_captures & -right_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -293,6 +293,71 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
       if (((1ULL << (en_pessant_square + 9)) & bitboards[BLACK_PAWNS]) != 0) {
         moves->push_back(Move(en_pessant_square + 9, en_pessant_square, BLACK_PAWNS, WHITE_PAWNS, EN_PESSANT));
       }
+    }
+  }
+}
+
+void Board::generate_knight_moves (std::vector<Move>* moves) {
+  bitboard empty_squares = get_empty_squares();
+  bitboard black_pieces = get_black_pieces();
+  bitboard white_pieces = get_white_pieces();
+  bitboard non_gh_file = 0x3F3F3F3F3F3F3F3FULL;
+  bitboard non_ab_file = 0xFCFCFCFCFCFCFCFCULL;
+
+  if (player == 0) {
+    bitboard knights = bitboards[WHITE_KNIGHTS];
+    while (knights > 0) {
+      bitboard single_knight = knights & -knights;
+      uint8_t from_square = __builtin_ctzll(single_knight);
+
+      // Generate all possible legal jumps
+      bitboard jumps = 0;
+      jumps |= (single_knight & non_ab_file) << 6;
+      jumps |= (single_knight & non_ab_file) >> 10;
+      jumps |= (single_knight & non_gh_file) << 10;
+      jumps |= (single_knight & non_gh_file) >> 6;
+      jumps |= single_knight << 15;
+      jumps |= single_knight << 17;
+      jumps |= single_knight >> 15;
+      jumps |= single_knight >> 17;
+      jumps &= ~white_pieces;
+
+      while (jumps > 0) {
+        bitboard single_jump = jumps & -jumps;
+        uint8_t to_square = __builtin_ctzll(single_jump);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, WHITE_KNIGHTS, captured_piece, NO_SPECIAL));
+        jumps &= jumps - 1;
+      }
+      knights &= knights - 1;
+    }
+    
+  } else {
+    bitboard knights = bitboards[BLACK_KNIGHTS];
+    while (knights > 0) {
+      bitboard single_knight = knights & -knights;
+      uint8_t from_square = __builtin_ctzll(single_knight);
+
+      // Generate all possible legal jumps
+      bitboard jumps = 0;
+      jumps |= (single_knight & non_ab_file) << 6;
+      jumps |= (single_knight & non_ab_file) >> 10;
+      jumps |= (single_knight & non_gh_file) << 10;
+      jumps |= (single_knight & non_gh_file) >> 6;
+      jumps |= single_knight << 15;
+      jumps |= single_knight << 17;
+      jumps |= single_knight >> 15;
+      jumps |= single_knight >> 17;
+      jumps &= ~black_pieces;
+
+      while (jumps > 0) {
+        bitboard single_jump = jumps & -jumps;
+        uint8_t to_square = __builtin_ctzll(single_jump);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, BLACK_KNIGHTS, captured_piece, NO_SPECIAL));
+        jumps &= jumps - 1;
+      }
+      knights &= knights - 1;
     }
   }
 }
