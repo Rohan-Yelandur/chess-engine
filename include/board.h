@@ -20,17 +20,17 @@ enum Pieces {
   BLACK_BISHOPS = 9,  // b
   BLACK_QUEEN = 10,   // q
   BLACK_KING = 11,    // k
+  NONE = 12           // .
 };
 
-// 0_0_queenPromotion_bishopPromotion_knightPromotion_rookPromotion_enpessant_castle
 enum Flags {
-  NO_SPECIAL = 0,
-  CASTLE = 1,
-  EN_PESSANT = 0b10,
-  ROOK_PROMOTION = 0b100,
-  KNIGHT_PROMOTION = 0b1000,
-  BISHOP_PROMOTION = 0b10000,
-  QUEEN_PROMOTION = 0b100000
+  NO_SPECIAL        = 0b0,
+  DOUBLE_ADVANCE    = 0b1,
+  EN_PESSANT        = 0b10,
+  ROOK_PROMOTION    = 0b100,
+  KNIGHT_PROMOTION  = 0b1000,
+  BISHOP_PROMOTION  = 0b10000,
+  QUEEN_PROMOTION   = 0b100000
 };
 
 class Move {
@@ -38,8 +38,10 @@ class Move {
     uint8_t from_square;
     uint8_t to_square;
     uint8_t flags; // Represent what special moves happened this turn
+    uint8_t piece;
+    uint8_t captured_piece;
 
-    Move (uint8_t from_square, uint8_t to_square, uint8_t flags);
+    Move (uint8_t from_square, uint8_t to_square, Pieces piece, Pieces captured_piece, uint8_t flags);
 };
 
 class Board {
@@ -47,12 +49,15 @@ class Board {
     bitboard bitboards[12];
     char piece_chars[12];
     uint8_t player; // 0 = white, 1 = black
+    uint8_t en_pessant_square;
 
     Board ();
     void print ();
     void clear ();
     void generate_pawn_moves (std::vector<Move>* moves);
+    void make_move (Move move);
     bitboard get_empty_squares ();
     bitboard get_black_pieces ();
     bitboard get_white_pieces ();
+    Pieces get_piece_on_square (uint8_t square);
 };

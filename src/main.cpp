@@ -4,11 +4,8 @@ int main () {
   Board board;
   board.clear();
   board.print();
-
-  std::vector<Move> moves;
-  board.generate_pawn_moves(&moves);
-  for (Move move : moves) {
-    std::cout << "Moving from " << (int)move.from_square << " to " << (int)move.to_square << "\n";
-  }
+  board.make_move(Move(3, 19, WHITE_QUEEN, NONE, 0));
+  std::cout << "\n\n";
+  board.print();
   return 0;
 }

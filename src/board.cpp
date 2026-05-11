@@ -1,8 +1,10 @@
 #include "board.h"
 
-Move::Move (uint8_t from_square, uint8_t to_square, uint8_t flags) {
+Move::Move (uint8_t from_square, uint8_t to_square, Pieces piece, Pieces captured_piece, uint8_t flags) {
   this->from_square = from_square;
   this->to_square = to_square;
+  this->piece = piece;
+  this->captured_piece = captured_piece;
   this->flags = flags;
 }
 
@@ -43,6 +45,7 @@ Board::Board () {
   piece_chars[11] = 'k';
 
   player = 0;
+  en_pessant_square = -1;
 }
 
 void Board::print () {
@@ -103,6 +106,18 @@ bitboard Board::get_white_pieces () {
   return white_pieces;
 }
 
+Pieces Board::get_piece_on_square (uint8_t square) {
+  Pieces piece = NONE;
+  bitboard piece_board = 1ULL << square; // Only the bit of the square is lit up
+  for (int i = 0; i < NUM_PIECES; i++) {
+    if ((piece_board & bitboards[i]) != 0) {
+      piece = (Pieces)i;
+      break;
+    }
+  }
+  return piece;
+}
+
 void Board::generate_pawn_moves (std::vector<Move>* moves) {
   bitboard empty_squares = get_empty_squares();
   bitboard black_pieces = get_black_pieces();
@@ -114,19 +129,28 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
       bitboard least_significant_bit = single_advances & -single_advances;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
       uint8_t from_square = to_square - 8;
-      moves->push_back(Move(from_square, to_square, NO_SPECIAL));
+      
+      // Promotion logic
+      if (to_square < 56) {
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, NONE, NO_SPECIAL));
+      } else {
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, NONE, ROOK_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, NONE, KNIGHT_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, NONE, BISHOP_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, NONE, QUEEN_PROMOTION));
+      }
       single_advances &= single_advances - 1;
     }
 
     // Double advances
-    bitboard second_rank_pieces = bitboards[WHITE_PAWNS] & 0xFF00;
+    bitboard second_rank_pieces = bitboards[WHITE_PAWNS] & 0xFF00ULL;
     bitboard can_single_advance = (second_rank_pieces << 8) & empty_squares;
     bitboard double_advances = (can_single_advance << 8) & empty_squares;
     while (double_advances > 0) {
       bitboard least_significant_bit = double_advances & -double_advances;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
       uint8_t from_square = to_square - 8 * 2;
-      moves->push_back(Move(from_square, to_square, NO_SPECIAL));
+      moves->push_back(Move(from_square, to_square, WHITE_PAWNS, NONE, DOUBLE_ADVANCE));
       double_advances &= double_advances - 1;
     }
 
@@ -137,7 +161,18 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
       bitboard least_significant_bit = left_captures & -left_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
       uint8_t from_square = to_square - 7;
-      moves->push_back(Move(from_square, to_square, NO_SPECIAL));
+      Pieces captured_piece = get_piece_on_square(to_square);
+      
+      // Promotion logic
+      if (to_square < 56) {
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, NO_SPECIAL));
+      } else {
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, ROOK_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, KNIGHT_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, BISHOP_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, QUEEN_PROMOTION));
+      }
+
       left_captures &= left_captures - 1;
     }
 
@@ -148,11 +183,86 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
       bitboard least_significant_bit = right_captures & -right_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
       uint8_t from_square = to_square - 9;
-      moves->push_back(Move(from_square, to_square, NO_SPECIAL));
+      Pieces captured_piece = get_piece_on_square(to_square);
+      
+      // Promotion logic
+      if (to_square < 56) {
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, NO_SPECIAL));
+      } else {
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, ROOK_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, KNIGHT_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, BISHOP_PROMOTION));
+        moves->push_back(Move(from_square, to_square, WHITE_PAWNS, captured_piece, QUEEN_PROMOTION));
+      }
+
       right_captures &= right_captures - 1;
+    }
+
+    // En Pessant
+    if (en_pessant_square != -1) {
+      if (((1ULL << (en_pessant_square - 7)) & bitboards[WHITE_PAWNS]) != 0) {
+        moves->push_back(Move(en_pessant_square - 7, en_pessant_square, WHITE_PAWNS, BLACK_PAWNS, EN_PESSANT));
+      }
+      if (((1ULL << (en_pessant_square - 9)) & bitboards[WHITE_PAWNS]) != 0) {
+        moves->push_back(Move(en_pessant_square - 9, en_pessant_square, WHITE_PAWNS, BLACK_PAWNS, EN_PESSANT));
+      }
     }
 
   } else {
 
   }
+}
+
+void Board::make_move (Move move) {
+  bitboards[move.piece] &= ~(1ULL << move.from_square); // Remove piece from where it moved
+
+  // Add piece to new square while accounting for promotion of pawns
+  if ((move.flags & (ROOK_PROMOTION | KNIGHT_PROMOTION | BISHOP_PROMOTION | QUEEN_PROMOTION)) != 0) {
+    if (player == 0) {
+      if ((move.flags & ROOK_PROMOTION) != 0) {
+        bitboards[WHITE_ROOKS] |= (1ULL << move.to_square);
+      } else if ((move.flags & KNIGHT_PROMOTION) != 0) {
+        bitboards[WHITE_KNIGHTS] |= (1ULL << move.to_square);
+      } else if ((move.flags & BISHOP_PROMOTION) != 0) {
+        bitboards[WHITE_BISHOPS] |= (1ULL << move.to_square);
+      } else if ((move.flags & QUEEN_PROMOTION) != 0) {
+        bitboards[WHITE_QUEEN] |= (1ULL << move.to_square);
+      }
+
+    } else {
+      if ((move.flags & ROOK_PROMOTION) != 0) {
+        bitboards[BLACK_ROOKS] |= (1ULL << move.to_square);
+      } else if ((move.flags & KNIGHT_PROMOTION) != 0) {
+        bitboards[BLACK_KNIGHTS] |= (1ULL << move.to_square);
+      } else if ((move.flags & BISHOP_PROMOTION) != 0) {
+        bitboards[BLACK_BISHOPS] |= (1ULL << move.to_square);
+      } else if ((move.flags & QUEEN_PROMOTION) != 0) {
+        bitboards[BLACK_QUEEN] |= (1ULL << move.to_square);
+      }
+    }
+
+  } else {
+    bitboards[move.piece] |= (1ULL << move.to_square);
+  }
+  
+  
+
+  // Removing captured piece
+  if (move.captured_piece != NONE) {
+    if ((move.flags & EN_PESSANT) != 0) {
+      uint8_t removal_square = (player == 0) ? en_pessant_square - 8 : en_pessant_square + 8;
+      bitboards[move.captured_piece] &= ~(1ULL << removal_square);
+    } else {
+      bitboards[move.captured_piece] &= ~(1ULL << move.to_square);
+    }
+  }
+
+  en_pessant_square = -1;
+  // If a pawn advanced twice, set the board state to allow for a possible en pessant.
+  if ((move.flags & DOUBLE_ADVANCE) != 0) {
+    en_pessant_square = (player == 0) ? move.from_square + 8 : move.from_square - 8;
+  }
+
+  // Switch the player after each move
+  player = (player == 0) ? 1 : 0;
 }
