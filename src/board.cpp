@@ -9,15 +9,6 @@ Move::Move (uint8_t from_square, uint8_t to_square, Pieces piece, Pieces capture
 }
 
 Board::Board () {
-  /* Bitboards                  00000000 <-- Most significant bit, h8
-                                00000000
-                                00000000
-                                00000000
-                                00000000
-                                00000000
-                                00000000
-  Least significant bit, a1 --> 00000000
-  */
   bitboards[WHITE_PAWNS]   = 0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'00000000;
   bitboards[WHITE_ROOKS]   = 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'10000001;
   bitboards[WHITE_KNIGHTS] = 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'01000010;
@@ -74,12 +65,21 @@ void Board::print () {
   std::cout << "  a b c d e f g h\n";
 }
 
-void Board::clear () {
-  #ifdef _WIN64
-    system("cls");
-  #else
-    system("clear");
-  #endif
+void Board::reset () {
+  bitboards[WHITE_PAWNS]   = 0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'00000000;
+  bitboards[WHITE_ROOKS]   = 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'10000001;
+  bitboards[WHITE_KNIGHTS] = 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'01000010;
+  bitboards[WHITE_BISHOPS] = 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00100100;
+  bitboards[WHITE_QUEEN]   = 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00001000;
+  bitboards[WHITE_KING]    = 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00010000;
+  bitboards[BLACK_PAWNS]   = 0b00000000'11111111'00000000'00000000'00000000'00000000'00000000'00000000;
+  bitboards[BLACK_ROOKS]   = 0b10000001'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
+  bitboards[BLACK_KNIGHTS] = 0b01000010'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
+  bitboards[BLACK_BISHOPS] = 0b00100100'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
+  bitboards[BLACK_QUEEN]   = 0b00001000'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
+  bitboards[BLACK_KING]    = 0b00010000'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
+  player = 0;
+  en_pessant_square = -1;
 }
 
 bitboard Board::get_empty_squares () {
@@ -121,6 +121,7 @@ Pieces Board::get_piece_on_square (uint8_t square) {
 void Board::generate_pawn_moves (std::vector<Move>* moves) {
   bitboard empty_squares = get_empty_squares();
   bitboard black_pieces = get_black_pieces();
+  bitboard white_pieces = get_white_pieces();
 
   if (player == 0) { // White to move
     // Single advances
@@ -209,7 +210,90 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
   } else {
+    // Single advances
+    bitboard single_advances = (bitboards[BLACK_PAWNS] >> 8) & empty_squares;
+    while (single_advances > 0) {
+      bitboard least_significant_bit = single_advances & -single_advances;
+      uint8_t to_square = __builtin_ctzll(least_significant_bit);
+      uint8_t from_square = to_square + 8;
+      
+      // Promotion logic
+      if (to_square > 7) {
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, NONE, NO_SPECIAL));
+      } else {
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, NONE, ROOK_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, NONE, KNIGHT_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, NONE, BISHOP_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, NONE, QUEEN_PROMOTION));
+      }
+      single_advances &= single_advances - 1;
+    }
 
+    // Double advances
+    bitboard seventh_rank_pieces = bitboards[BLACK_PAWNS] & 0xFF000000000000ULL;
+    bitboard can_single_advance = (seventh_rank_pieces >> 8) & empty_squares;
+    bitboard double_advances = (can_single_advance >> 8) & empty_squares;
+    while (double_advances > 0) {
+      bitboard least_significant_bit = double_advances & -double_advances;
+      uint8_t to_square = __builtin_ctzll(least_significant_bit);
+      uint8_t from_square = to_square + 8 * 2;
+      moves->push_back(Move(from_square, to_square, BLACK_PAWNS, NONE, DOUBLE_ADVANCE));
+      double_advances &= double_advances - 1;
+    }
+
+    // Left captures - Left and right are from the perspective of white, not black
+    bitboard non_a_rank = (bitboard)0xFEFEFEFEFEFEFEFE;
+    bitboard left_captures = ((bitboards[BLACK_PAWNS] & non_a_rank) >> 7) & white_pieces;
+    while (left_captures > 0) {
+      bitboard least_significant_bit = left_captures & -left_captures;
+      uint8_t to_square = __builtin_ctzll(least_significant_bit);
+      uint8_t from_square = to_square + 7;
+      Pieces captured_piece = get_piece_on_square(to_square);
+      
+      // Promotion logic
+      if (to_square > 7) {
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, NO_SPECIAL));
+      } else {
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, ROOK_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, KNIGHT_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, BISHOP_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, QUEEN_PROMOTION));
+      }
+
+      left_captures &= left_captures - 1;
+    }
+
+    // Right captures
+    bitboard non_h_rank = (bitboard)0x7F7F7F7F7F7F7F7F;
+    bitboard right_captures = ((bitboards[BLACK_PAWNS] & non_h_rank) >> 9) & white_pieces;
+    while (right_captures > 0) {
+      bitboard least_significant_bit = right_captures & -right_captures;
+      uint8_t to_square = __builtin_ctzll(least_significant_bit);
+      uint8_t from_square = to_square + 9;
+      Pieces captured_piece = get_piece_on_square(to_square);
+      
+      // Promotion logic
+      if (to_square > 7) {
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, NO_SPECIAL));
+      } else {
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, ROOK_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, KNIGHT_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, BISHOP_PROMOTION));
+        moves->push_back(Move(from_square, to_square, BLACK_PAWNS, captured_piece, QUEEN_PROMOTION));
+      }
+
+      right_captures &= right_captures - 1;
+    }
+
+    // En Pessant
+    if (en_pessant_square != -1) {
+      if (((1ULL << (en_pessant_square + 7)) & bitboards[BLACK_PAWNS]) != 0) {
+        moves->push_back(Move(en_pessant_square + 7, en_pessant_square, BLACK_PAWNS, WHITE_PAWNS, EN_PESSANT));
+      }
+      if (((1ULL << (en_pessant_square + 9)) & bitboards[BLACK_PAWNS]) != 0) {
+        moves->push_back(Move(en_pessant_square + 9, en_pessant_square, BLACK_PAWNS, WHITE_PAWNS, EN_PESSANT));
+      }
+    }
   }
 }
 

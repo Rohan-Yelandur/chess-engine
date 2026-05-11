@@ -4,6 +4,18 @@
 #include <vector>
 
 using bitboard = uint64_t;
+/* Bitboards                  00100000 <-- Most significant bit, h8
+                              00000000
+                              00000000
+                              00000000
+                              00000000
+                              00000000
+                              00000000
+Least significant bit, a1 --> 00001000
+
+Looks reversed, equivalent to the 64 bit number:
+0b00000100'00000000'00000000'00000000'00000000'00000000'00000000'00001000
+*/
 
 #define NUM_PIECES 12
 
@@ -53,7 +65,7 @@ class Board {
 
     Board ();
     void print ();
-    void clear ();
+    void reset ();
     void generate_pawn_moves (std::vector<Move>* moves);
     void make_move (Move move);
     bitboard get_empty_squares ();
