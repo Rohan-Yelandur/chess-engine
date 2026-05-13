@@ -504,6 +504,84 @@ void Board::generate_bishop_moves (std::vector<Move>* moves) {
   }
 }
 
+void Board::generate_queen_moves (std::vector<Move>* moves) {
+  bitboard occupied = ~get_empty_squares();
+
+  if (player == 0) {
+    bitboard queens = bitboards[WHITE_QUEEN];  
+
+    while (queens > 0) {
+      bitboard single_queen = queens & -queens;
+      uint8_t from_square = __builtin_ctzll(single_queen);
+      bitboard occupied_on_file = occupied & filemasks[from_square];
+      bitboard occupied_on_rank = occupied & rankmasks[from_square];
+      bitboard occupied_on_diag = occupied & diagmasks[from_square];
+      bitboard occupied_on_antidiag = occupied & antidiagmasks[from_square];
+
+      // Hyperbola Quintessence formula
+      bitboard file_attacks = ((occupied_on_file - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_file) - 2 * reverse_bits(single_queen))) 
+                         & filemasks[from_square];
+      bitboard rank_attacks = ((occupied_on_rank - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_rank) - 2 * reverse_bits(single_queen))) 
+                         & rankmasks[from_square];
+      bitboard diag_attacks = ((occupied_on_diag - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_diag) - 2 * reverse_bits(single_queen))) 
+                         & diagmasks[from_square];
+      bitboard antidiag_attacks = ((occupied_on_antidiag - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_antidiag) - 2 * reverse_bits(single_queen))) 
+                         & antidiagmasks[from_square];
+
+      bitboard attacks = file_attacks | rank_attacks | diag_attacks | antidiag_attacks;
+      attacks &= ~get_white_pieces(); // remove friendly pieces
+
+      while (attacks > 0) {
+        uint8_t to_square = __builtin_ctzll(attacks & -attacks);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, WHITE_QUEEN, captured_piece, NO_SPECIAL));
+        attacks &= attacks - 1;
+      }
+
+      queens &= queens - 1;
+    }
+
+  } else {
+    bitboard queens = bitboards[BLACK_QUEEN];  
+
+    while (queens > 0) {
+      bitboard single_queen = queens & -queens;
+      uint8_t from_square = __builtin_ctzll(single_queen);
+      bitboard occupied_on_file = occupied & filemasks[from_square];
+      bitboard occupied_on_rank = occupied & rankmasks[from_square];
+      bitboard occupied_on_diag = occupied & diagmasks[from_square];
+      bitboard occupied_on_antidiag = occupied & antidiagmasks[from_square];
+      bitboard file_attacks = ((occupied_on_file - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_file) - 2 * reverse_bits(single_queen))) 
+                         & filemasks[from_square];
+      bitboard rank_attacks = ((occupied_on_rank - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_rank) - 2 * reverse_bits(single_queen))) 
+                         & rankmasks[from_square];
+      bitboard diag_attacks = ((occupied_on_diag - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_diag) - 2 * reverse_bits(single_queen))) 
+                         & diagmasks[from_square];
+      bitboard antidiag_attacks = ((occupied_on_antidiag - 2 * single_queen) ^ 
+                         reverse_bits(reverse_bits(occupied_on_antidiag) - 2 * reverse_bits(single_queen))) 
+                         & antidiagmasks[from_square];
+      bitboard attacks = file_attacks | rank_attacks | diag_attacks | antidiag_attacks;
+      attacks &= ~get_black_pieces(); // remove friendly pieces
+
+      while (attacks > 0) {
+        uint8_t to_square = __builtin_ctzll(attacks & -attacks);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, BLACK_QUEEN, captured_piece, NO_SPECIAL));
+        attacks &= attacks - 1;
+      }
+
+      queens &= queens - 1;
+    }
+  }
+}
+
 void Board::generate_king_moves (std::vector<Move>* moves) {
   if (player == 0) {
     bitboard king = bitboards[WHITE_KING];
