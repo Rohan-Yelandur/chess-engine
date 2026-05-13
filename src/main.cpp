@@ -4,7 +4,7 @@ int main() {
     Board board;
     board.print();
     std::vector<Move> moves;
-    board.generate_knight_moves(&moves);
+    board.generate_rook_moves(&moves);
 
     for (Move move : moves) {
         std::cout << "From " << (int)move.from_square << " to " << (int)move.to_square << "\n";

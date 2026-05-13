@@ -35,6 +35,29 @@ Board::Board () {
   piece_chars[10] = 'q';
   piece_chars[11] = 'k';
 
+  bitboard file_mask_list[8] = {FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H};
+  bitboard rank_mask_list[8] = {RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8};
+  for (int sq = 0; sq < 64; sq++) {
+    filemasks[sq] = file_mask_list[sq % 8];
+    rankmasks[sq] = rank_mask_list[sq / 8];
+  }
+
+  // Compute diagonal and anti-diagonal masks
+  bitboard diag_mask_list[15] = {0};
+  bitboard antidiag_mask_list[15] = {0};
+  for (int sq = 0; sq < 64; sq++) {
+    int rank = sq / 8;
+    int file = sq % 8;
+    diag_mask_list[rank - file + 7] |= (1ULL << sq);
+    antidiag_mask_list[rank + file] |= (1ULL << sq);
+  }
+  for (int sq = 0; sq < 64; sq++) {
+    int rank = sq / 8;
+    int file = sq % 8;
+    diagmasks[sq] = diag_mask_list[rank - file + 7];
+    antidiagmasks[sq] = antidiag_mask_list[rank + file];
+  }
+
   player = 0;
   en_pessant_square = -1;
 }
@@ -156,8 +179,7 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Left captures
-    bitboard non_a_file = (bitboard)0xFEFEFEFEFEFEFEFE;
-    bitboard left_captures = ((bitboards[WHITE_PAWNS] & non_a_file) << 7) & black_pieces;
+    bitboard left_captures = ((bitboards[WHITE_PAWNS] & NON_A_FILE) << 7) & black_pieces;
     while (left_captures > 0) {
       bitboard least_significant_bit = left_captures & -left_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -178,8 +200,7 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Right captures
-    bitboard non_h_file = (bitboard)0x7F7F7F7F7F7F7F7F;
-    bitboard right_captures = ((bitboards[WHITE_PAWNS] & non_h_file) << 9) & black_pieces;
+    bitboard right_captures = ((bitboards[WHITE_PAWNS] & NON_H_FILE) << 9) & black_pieces;
     while (right_captures > 0) {
       bitboard least_significant_bit = right_captures & -right_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -242,8 +263,7 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Left captures - Left and right are from the perspective of white, not black
-    bitboard non_a_file = (bitboard)0xFEFEFEFEFEFEFEFE;
-    bitboard left_captures = ((bitboards[BLACK_PAWNS] & non_a_file) >> 7) & white_pieces;
+    bitboard left_captures = ((bitboards[BLACK_PAWNS] & NON_A_FILE) >> 7) & white_pieces;
     while (left_captures > 0) {
       bitboard least_significant_bit = left_captures & -left_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -264,8 +284,7 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Right captures
-    bitboard non_h_file = (bitboard)0x7F7F7F7F7F7F7F7F;
-    bitboard right_captures = ((bitboards[BLACK_PAWNS] & non_h_file) >> 9) & white_pieces;
+    bitboard right_captures = ((bitboards[BLACK_PAWNS] & NON_H_FILE) >> 9) & white_pieces;
     while (right_captures > 0) {
       bitboard least_significant_bit = right_captures & -right_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -301,8 +320,6 @@ void Board::generate_knight_moves (std::vector<Move>* moves) {
   bitboard empty_squares = get_empty_squares();
   bitboard black_pieces = get_black_pieces();
   bitboard white_pieces = get_white_pieces();
-  bitboard non_gh_file = 0x3F3F3F3F3F3F3F3FULL;
-  bitboard non_ab_file = 0xFCFCFCFCFCFCFCFCULL;
 
   if (player == 0) {
     bitboard knights = bitboards[WHITE_KNIGHTS];
@@ -312,10 +329,10 @@ void Board::generate_knight_moves (std::vector<Move>* moves) {
 
       // Generate all possible legal jumps
       bitboard jumps = 0;
-      jumps |= (single_knight & non_ab_file) << 6;
-      jumps |= (single_knight & non_ab_file) >> 10;
-      jumps |= (single_knight & non_gh_file) << 10;
-      jumps |= (single_knight & non_gh_file) >> 6;
+      jumps |= (single_knight & NON_AB_FILE) << 6;
+      jumps |= (single_knight & NON_AB_FILE) >> 10;
+      jumps |= (single_knight & NON_GH_FILE) << 10;
+      jumps |= (single_knight & NON_GH_FILE) >> 6;
       jumps |= single_knight << 15;
       jumps |= single_knight << 17;
       jumps |= single_knight >> 15;
@@ -340,10 +357,10 @@ void Board::generate_knight_moves (std::vector<Move>* moves) {
 
       // Generate all possible legal jumps
       bitboard jumps = 0;
-      jumps |= (single_knight & non_ab_file) << 6;
-      jumps |= (single_knight & non_ab_file) >> 10;
-      jumps |= (single_knight & non_gh_file) << 10;
-      jumps |= (single_knight & non_gh_file) >> 6;
+      jumps |= (single_knight & NON_AB_FILE) << 6;
+      jumps |= (single_knight & NON_AB_FILE) >> 10;
+      jumps |= (single_knight & NON_GH_FILE) << 10;
+      jumps |= (single_knight & NON_GH_FILE) >> 6;
       jumps |= single_knight << 15;
       jumps |= single_knight << 17;
       jumps |= single_knight >> 15;
@@ -358,6 +375,178 @@ void Board::generate_knight_moves (std::vector<Move>* moves) {
         jumps &= jumps - 1;
       }
       knights &= knights - 1;
+    }
+  }
+}
+
+void Board::generate_rook_moves (std::vector<Move>* moves) {
+  bitboard occupied = ~get_empty_squares();
+
+  if (player == 0) {
+    bitboard rooks = bitboards[WHITE_ROOKS];  
+
+    while (rooks > 0) {
+      bitboard single_rook = rooks & -rooks;
+      uint8_t from_square = __builtin_ctzll(single_rook);
+      bitboard occupied_on_file = occupied & filemasks[from_square];
+      bitboard occupied_on_rank = occupied & rankmasks[from_square];
+
+      // Hyperbola Quintessence formula
+      bitboard file_attacks = ((occupied_on_file - 2 * single_rook) ^ 
+                         reverse_bits(reverse_bits(occupied_on_file) - 2 * reverse_bits(single_rook))) 
+                         & filemasks[from_square];
+      bitboard rank_attacks = ((occupied_on_rank - 2 * single_rook) ^ 
+                         reverse_bits(reverse_bits(occupied_on_rank) - 2 * reverse_bits(single_rook))) 
+                         & rankmasks[from_square];
+
+
+      bitboard attacks = file_attacks | rank_attacks;
+      attacks &= ~get_white_pieces(); // remove friendly pieces
+
+      while (attacks > 0) {
+        uint8_t to_square = __builtin_ctzll(attacks & -attacks);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, WHITE_ROOKS, captured_piece, NO_SPECIAL));
+        attacks &= attacks - 1;
+      }
+
+      rooks &= rooks - 1;
+    }
+
+  } else {
+    bitboard rooks = bitboards[BLACK_ROOKS];  
+
+    while (rooks > 0) {
+      bitboard single_rook = rooks & -rooks;
+      uint8_t from_square = __builtin_ctzll(single_rook);
+      bitboard occupied_on_file = occupied & filemasks[from_square];
+      bitboard occupied_on_rank = occupied & rankmasks[from_square];
+      bitboard file_attacks = ((occupied_on_file - 2 * single_rook) ^ 
+                         reverse_bits(reverse_bits(occupied_on_file) - 2 * reverse_bits(single_rook))) 
+                         & filemasks[from_square];
+      bitboard rank_attacks = ((occupied_on_rank - 2 * single_rook) ^ 
+                         reverse_bits(reverse_bits(occupied_on_rank) - 2 * reverse_bits(single_rook))) 
+                         & rankmasks[from_square];
+      bitboard attacks = file_attacks | rank_attacks;
+      attacks &= ~get_black_pieces(); // remove friendly pieces
+
+      while (attacks > 0) {
+        uint8_t to_square = __builtin_ctzll(attacks & -attacks);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, BLACK_ROOKS, captured_piece, NO_SPECIAL));
+        attacks &= attacks - 1;
+      }
+
+      rooks &= rooks - 1;
+    }
+  }
+}
+
+void Board::generate_bishop_moves (std::vector<Move>* moves) {
+  bitboard occupied = ~get_empty_squares();
+
+  if (player == 0) {
+    bitboard bishops = bitboards[WHITE_BISHOPS];  
+
+    while (bishops > 0) {
+      bitboard single_bishop = bishops & -bishops;
+      uint8_t from_square = __builtin_ctzll(single_bishop);
+      bitboard occupied_on_diag = occupied & diagmasks[from_square];
+      bitboard occupied_on_antidiag = occupied & antidiagmasks[from_square];
+
+      // Hyperbola Quintessence formula
+      bitboard diag_attacks = ((occupied_on_diag - 2 * single_bishop) ^ 
+                         reverse_bits(reverse_bits(occupied_on_diag) - 2 * reverse_bits(single_bishop))) 
+                         & diagmasks[from_square];
+      bitboard antidiag_attacks = ((occupied_on_antidiag - 2 * single_bishop) ^ 
+                         reverse_bits(reverse_bits(occupied_on_antidiag) - 2 * reverse_bits(single_bishop))) 
+                         & antidiagmasks[from_square];
+
+      bitboard attacks = diag_attacks | antidiag_attacks;
+      attacks &= ~get_white_pieces(); // remove friendly pieces
+
+      while (attacks > 0) {
+        uint8_t to_square = __builtin_ctzll(attacks & -attacks);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, WHITE_BISHOPS, captured_piece, NO_SPECIAL));
+        attacks &= attacks - 1;
+      }
+
+      bishops &= bishops - 1;
+    }
+
+  } else {
+    bitboard bishops = bitboards[BLACK_BISHOPS];  
+
+    while (bishops > 0) {
+      bitboard single_bishop = bishops & -bishops;
+      uint8_t from_square = __builtin_ctzll(single_bishop);
+      bitboard occupied_on_diag = occupied & diagmasks[from_square];
+      bitboard occupied_on_antidiag = occupied & antidiagmasks[from_square];
+      bitboard diag_attacks = ((occupied_on_diag - 2 * single_bishop) ^ 
+                         reverse_bits(reverse_bits(occupied_on_diag) - 2 * reverse_bits(single_bishop))) 
+                         & diagmasks[from_square];
+      bitboard antidiag_attacks = ((occupied_on_antidiag - 2 * single_bishop) ^ 
+                         reverse_bits(reverse_bits(occupied_on_antidiag) - 2 * reverse_bits(single_bishop))) 
+                         & antidiagmasks[from_square];
+      bitboard attacks = diag_attacks | antidiag_attacks;
+      attacks &= ~get_black_pieces(); // remove friendly pieces
+
+      while (attacks > 0) {
+        uint8_t to_square = __builtin_ctzll(attacks & -attacks);
+        Pieces captured_piece = get_piece_on_square(to_square);
+        moves->push_back(Move(from_square, to_square, BLACK_BISHOPS, captured_piece, NO_SPECIAL));
+        attacks &= attacks - 1;
+      }
+
+      bishops &= bishops - 1;
+    }
+  }
+}
+
+void Board::generate_king_moves (std::vector<Move>* moves) {
+  if (player == 0) {
+    bitboard king = bitboards[WHITE_KING];
+    uint8_t from_square = __builtin_ctzll(king);
+  
+    bitboard pos = 0;
+    pos |= king << 8;
+    pos |= king >> 8;
+    pos |= (king << 9) & NON_H_FILE;
+    pos |= (king << 1) & NON_H_FILE;
+    pos |= (king >> 7) & NON_H_FILE;
+    pos |= (king << 7) & NON_A_FILE;
+    pos |= (king >> 1) & NON_A_FILE;
+    pos |= (king >> 9) & NON_A_FILE;
+    pos &= ~get_white_pieces();
+
+    while (pos > 0) {
+      uint8_t to_square = __builtin_ctzll(pos & -pos);
+      Pieces captured_piece = get_piece_on_square(to_square);
+      moves->push_back(Move(from_square, to_square, WHITE_KING, captured_piece, NO_SPECIAL));
+      pos &= pos - 1;
+    }
+
+  } else {
+    bitboard king = bitboards[BLACK_KING];
+    uint8_t from_square = __builtin_ctzll(king);
+  
+    bitboard pos = 0;
+    pos |= king << 8;
+    pos |= king >> 8;
+    pos |= (king << 9) & NON_H_FILE;
+    pos |= (king << 1) & NON_H_FILE;
+    pos |= (king >> 7) & NON_H_FILE;
+    pos |= (king << 7) & NON_A_FILE;
+    pos |= (king >> 1) & NON_A_FILE;
+    pos |= (king >> 9) & NON_A_FILE;
+    pos &= ~get_black_pieces();
+
+    while (pos > 0) {
+      uint8_t to_square = __builtin_ctzll(pos & -pos);
+      Pieces captured_piece = get_piece_on_square(to_square);
+      moves->push_back(Move(from_square, to_square, BLACK_KING, captured_piece, NO_SPECIAL));
+      pos &= pos - 1;
     }
   }
 }
