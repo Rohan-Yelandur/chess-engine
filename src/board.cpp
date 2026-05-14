@@ -60,6 +60,8 @@ Board::Board () {
 
   player = 0;
   en_pessant_square = -1;
+  castling_rights = 0b00001111;
+  move_count = 0;
 }
 
 void Board::print () {
@@ -103,6 +105,7 @@ void Board::reset () {
   bitboards[BLACK_KING]    = 0b00010000'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
   player = 0;
   en_pessant_square = -1;
+  castling_rights = 0b00001111;
 }
 
 bitboard Board::get_empty_squares () {
@@ -263,7 +266,7 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Left captures - Left and right are from the perspective of white, not black
-    bitboard left_captures = ((bitboards[BLACK_PAWNS] & NON_A_FILE) >> 7) & white_pieces;
+    bitboard left_captures = ((bitboards[BLACK_PAWNS] & NON_H_FILE) >> 7) & white_pieces;
     while (left_captures > 0) {
       bitboard least_significant_bit = left_captures & -left_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -284,7 +287,7 @@ void Board::generate_pawn_moves (std::vector<Move>* moves) {
     }
 
     // Right captures
-    bitboard right_captures = ((bitboards[BLACK_PAWNS] & NON_H_FILE) >> 9) & white_pieces;
+    bitboard right_captures = ((bitboards[BLACK_PAWNS] & NON_A_FILE) >> 9) & white_pieces;
     while (right_captures > 0) {
       bitboard least_significant_bit = right_captures & -right_captures;
       uint8_t to_square = __builtin_ctzll(least_significant_bit);
@@ -333,10 +336,10 @@ void Board::generate_knight_moves (std::vector<Move>* moves) {
       jumps |= (single_knight & NON_AB_FILE) >> 10;
       jumps |= (single_knight & NON_GH_FILE) << 10;
       jumps |= (single_knight & NON_GH_FILE) >> 6;
-      jumps |= single_knight << 15;
-      jumps |= single_knight << 17;
-      jumps |= single_knight >> 15;
-      jumps |= single_knight >> 17;
+      jumps |= (single_knight & NON_A_FILE) << 15;
+      jumps |= (single_knight & NON_H_FILE) << 17;
+      jumps |= (single_knight & NON_H_FILE) >> 15;
+      jumps |= (single_knight & NON_A_FILE) >> 17;
       jumps &= ~white_pieces;
 
       while (jumps > 0) {
@@ -361,10 +364,10 @@ void Board::generate_knight_moves (std::vector<Move>* moves) {
       jumps |= (single_knight & NON_AB_FILE) >> 10;
       jumps |= (single_knight & NON_GH_FILE) << 10;
       jumps |= (single_knight & NON_GH_FILE) >> 6;
-      jumps |= single_knight << 15;
-      jumps |= single_knight << 17;
-      jumps |= single_knight >> 15;
-      jumps |= single_knight >> 17;
+      jumps |= (single_knight & NON_A_FILE) << 15;
+      jumps |= (single_knight & NON_H_FILE) << 17;
+      jumps |= (single_knight & NON_H_FILE) >> 15;
+      jumps |= (single_knight & NON_A_FILE) >> 17;
       jumps &= ~black_pieces;
 
       while (jumps > 0) {
@@ -590,12 +593,12 @@ void Board::generate_king_moves (std::vector<Move>* moves) {
     bitboard pos = 0;
     pos |= king << 8;
     pos |= king >> 8;
-    pos |= (king << 9) & NON_H_FILE;
-    pos |= (king << 1) & NON_H_FILE;
-    pos |= (king >> 7) & NON_H_FILE;
-    pos |= (king << 7) & NON_A_FILE;
-    pos |= (king >> 1) & NON_A_FILE;
-    pos |= (king >> 9) & NON_A_FILE;
+    pos |= (king << 9) & NON_A_FILE;
+    pos |= (king << 1) & NON_A_FILE;
+    pos |= (king >> 7) & NON_A_FILE;
+    pos |= (king << 7) & NON_H_FILE;
+    pos |= (king >> 1) & NON_H_FILE;
+    pos |= (king >> 9) & NON_H_FILE;
     pos &= ~get_white_pieces();
 
     while (pos > 0) {
@@ -605,6 +608,26 @@ void Board::generate_king_moves (std::vector<Move>* moves) {
       pos &= pos - 1;
     }
 
+    // White kingside castling
+    if (castling_rights & WHITE_KINGSIDE) {
+      bitboard between = (1ULL << 5) | (1ULL << 6);
+      if (!(~get_empty_squares() & between)) {
+        if (!is_square_attacked(4, 1) && !is_square_attacked(5, 1) && !is_square_attacked(6, 1)) {
+          moves->push_back(Move(4, 6, WHITE_KING, NONE, CASTLE));
+        }
+      }
+    }
+
+    // White queenside castling
+    if (castling_rights & WHITE_QUEENSIDE) {
+      bitboard between = (1ULL << 1) | (1ULL << 2) | (1ULL << 3);
+      if (!(~get_empty_squares() & between)) {
+        if (!is_square_attacked(4, 1) && !is_square_attacked(3, 1) && !is_square_attacked(2, 1)) {
+          moves->push_back(Move(4, 2, WHITE_KING, NONE, CASTLE));
+        }
+      }
+    }
+
   } else {
     bitboard king = bitboards[BLACK_KING];
     uint8_t from_square = __builtin_ctzll(king);
@@ -612,12 +635,12 @@ void Board::generate_king_moves (std::vector<Move>* moves) {
     bitboard pos = 0;
     pos |= king << 8;
     pos |= king >> 8;
-    pos |= (king << 9) & NON_H_FILE;
-    pos |= (king << 1) & NON_H_FILE;
-    pos |= (king >> 7) & NON_H_FILE;
-    pos |= (king << 7) & NON_A_FILE;
-    pos |= (king >> 1) & NON_A_FILE;
-    pos |= (king >> 9) & NON_A_FILE;
+    pos |= (king << 9) & NON_A_FILE;
+    pos |= (king << 1) & NON_A_FILE;
+    pos |= (king >> 7) & NON_A_FILE;
+    pos |= (king << 7) & NON_H_FILE;
+    pos |= (king >> 1) & NON_H_FILE;
+    pos |= (king >> 9) & NON_H_FILE;
     pos &= ~get_black_pieces();
 
     while (pos > 0) {
@@ -626,7 +649,116 @@ void Board::generate_king_moves (std::vector<Move>* moves) {
       moves->push_back(Move(from_square, to_square, BLACK_KING, captured_piece, NO_SPECIAL));
       pos &= pos - 1;
     }
+
+    // Black kingside castling
+    if (castling_rights & BLACK_KINGSIDE) {
+      bitboard between = (1ULL << 61) | (1ULL << 62);
+      if (!(~get_empty_squares() & between)) {
+        if (!is_square_attacked(60, 0) && !is_square_attacked(61, 0) && !is_square_attacked(62, 0)) {
+          moves->push_back(Move(60, 62, BLACK_KING, NONE, CASTLE));
+        }
+      }
+    }
+
+    // Black queenside castling
+    if (castling_rights & BLACK_QUEENSIDE) {
+      bitboard between = (1ULL << 57) | (1ULL << 58) | (1ULL << 59);
+      if (!(~get_empty_squares() & between)) {
+        if (!is_square_attacked(60, 0) && !is_square_attacked(59, 0) && !is_square_attacked(58, 0)) {
+          moves->push_back(Move(60, 58, BLACK_KING, NONE, CASTLE));
+        }
+      }
+    }
   }
+}
+
+void Board::generate_all_moves (std::vector<Move>* moves) {
+  generate_pawn_moves(moves);
+  generate_knight_moves(moves);
+  generate_rook_moves(moves);
+  generate_bishop_moves(moves);
+  generate_queen_moves(moves);
+  generate_king_moves(moves);
+
+  // Only keep legal moves
+  for (int i = moves->size() - 1; i >= 0; i--) {
+    Board copy = *this;
+    copy.make_move((*moves)[i]);
+    uint8_t king_square = __builtin_ctzll(copy.bitboards[player == 0 ? WHITE_KING : BLACK_KING]);
+    if (copy.is_square_attacked(king_square, copy.player)) {
+        moves->erase(moves->begin() + i);
+    }
+  }
+}
+
+bool Board::is_square_attacked(uint8_t square, uint8_t attacking_color) {
+    bitboard sq_bit = 1ULL << square;
+    bitboard occupied = ~get_empty_squares();
+    bitboard enemy_knights = attacking_color == 0 ? bitboards[WHITE_KNIGHTS] : bitboards[BLACK_KNIGHTS];
+    bitboard enemy_bishops = attacking_color == 0 ? bitboards[WHITE_BISHOPS] : bitboards[BLACK_BISHOPS];
+    bitboard enemy_rooks = attacking_color == 0 ? bitboards[WHITE_ROOKS] : bitboards[BLACK_ROOKS];
+    bitboard enemy_queens = attacking_color == 0 ? bitboards[WHITE_QUEEN] : bitboards[BLACK_QUEEN];
+    bitboard enemy_pawns = attacking_color == 0 ? bitboards[WHITE_PAWNS] : bitboards[BLACK_PAWNS];
+    bitboard enemy_king = attacking_color == 0 ? bitboards[WHITE_KING] : bitboards[BLACK_KING];
+
+    // Knight check
+    bitboard knight_attacks = 0;
+    knight_attacks |= (sq_bit & NON_AB_FILE) << 6;
+    knight_attacks |= (sq_bit & NON_AB_FILE) >> 10;
+    knight_attacks |= (sq_bit & NON_GH_FILE) << 10;
+    knight_attacks |= (sq_bit & NON_GH_FILE) >> 6;
+    knight_attacks |= (sq_bit & NON_A_FILE) << 15;
+    knight_attacks |= (sq_bit & NON_H_FILE) << 17;
+    knight_attacks |= (sq_bit & NON_H_FILE) >> 15;
+    knight_attacks |= (sq_bit & NON_A_FILE) >> 17;
+    if (knight_attacks & enemy_knights) return true;
+
+    // Rook/Queen check (files and ranks)
+    bitboard occupied_on_file = occupied & filemasks[square];
+    bitboard occupied_on_rank = occupied & rankmasks[square];
+    bitboard file_attacks = ((occupied_on_file - 2 * sq_bit) ^ 
+                       reverse_bits(reverse_bits(occupied_on_file) - 2 * reverse_bits(sq_bit))) 
+                       & filemasks[square];
+    bitboard rank_attacks = ((occupied_on_rank - 2 * sq_bit) ^ 
+                       reverse_bits(reverse_bits(occupied_on_rank) - 2 * reverse_bits(sq_bit))) 
+                       & rankmasks[square];
+    if ((file_attacks | rank_attacks) & (enemy_rooks | enemy_queens)) return true;
+
+    // Bishop/Queen check (diagonals and anti-diagonals)
+    bitboard occupied_on_diag = occupied & diagmasks[square];
+    bitboard occupied_on_antidiag = occupied & antidiagmasks[square];
+    bitboard diag_attacks = ((occupied_on_diag - 2 * sq_bit) ^ 
+                       reverse_bits(reverse_bits(occupied_on_diag) - 2 * reverse_bits(sq_bit))) 
+                       & diagmasks[square];
+    bitboard antidiag_attacks = ((occupied_on_antidiag - 2 * sq_bit) ^ 
+                       reverse_bits(reverse_bits(occupied_on_antidiag) - 2 * reverse_bits(sq_bit))) 
+                       & antidiagmasks[square];
+    if ((diag_attacks | antidiag_attacks) & (enemy_bishops | enemy_queens)) return true;
+
+    // Pawn check
+    if (attacking_color == 0) {
+      // White pawns attack upward
+      if (((sq_bit >> 7) & NON_A_FILE & enemy_pawns) != 0) return true;
+      if (((sq_bit >> 9) & NON_H_FILE & enemy_pawns) != 0) return true;
+    } else {
+      // Black pawns attack downward
+      if (((sq_bit << 7) & NON_H_FILE & enemy_pawns) != 0) return true;
+      if (((sq_bit << 9) & NON_A_FILE & enemy_pawns) != 0) return true;
+    }
+
+    // King check
+    bitboard king_attacks = 0;
+    king_attacks |= sq_bit << 8;
+    king_attacks |= sq_bit >> 8;
+    king_attacks |= (sq_bit << 9) & NON_A_FILE;
+    king_attacks |= (sq_bit << 1) & NON_A_FILE;
+    king_attacks |= (sq_bit >> 7) & NON_A_FILE;
+    king_attacks |= (sq_bit << 7) & NON_H_FILE;
+    king_attacks |= (sq_bit >> 1) & NON_H_FILE;
+    king_attacks |= (sq_bit >> 9) & NON_H_FILE;
+    if (king_attacks & enemy_king) return true;
+
+    return false;
 }
 
 void Board::make_move (Move move) {
@@ -660,8 +792,23 @@ void Board::make_move (Move move) {
   } else {
     bitboards[move.piece] |= (1ULL << move.to_square);
   }
-  
-  
+
+  // Handle castle
+  if (move.flags & CASTLE) {
+    if (move.to_square == 6) { // White kingside
+      bitboards[WHITE_ROOKS] &= ~(1ULL << 7);
+      bitboards[WHITE_ROOKS] |= (1ULL << 5);
+    } else if (move.to_square == 2) { // White queenside
+      bitboards[WHITE_ROOKS] &= ~(1ULL << 0);
+      bitboards[WHITE_ROOKS] |= (1ULL << 3);
+    } else if (move.to_square == 62) { // Black kingside
+      bitboards[BLACK_ROOKS] &= ~(1ULL << 63);
+      bitboards[BLACK_ROOKS] |= (1ULL << 61);
+    } else if (move.to_square == 58) { // Black queenside
+      bitboards[BLACK_ROOKS] &= ~(1ULL << 56);
+      bitboards[BLACK_ROOKS] |= (1ULL << 59);
+    }
+  }
 
   // Removing captured piece
   if (move.captured_piece != NONE) {
@@ -672,6 +819,18 @@ void Board::make_move (Move move) {
       bitboards[move.captured_piece] &= ~(1ULL << move.to_square);
     }
   }
+
+  // Revoke castling rights
+  if (move.piece == WHITE_KING) castling_rights &= ~(WHITE_KINGSIDE | WHITE_QUEENSIDE);
+  if (move.piece == BLACK_KING) castling_rights &= ~(BLACK_KINGSIDE | BLACK_QUEENSIDE);
+  if (move.piece == WHITE_ROOKS && move.from_square == 0) castling_rights &= ~WHITE_QUEENSIDE;
+  if (move.piece == WHITE_ROOKS && move.from_square == 7) castling_rights &= ~WHITE_KINGSIDE;
+  if (move.piece == BLACK_ROOKS && move.from_square == 56) castling_rights &= ~BLACK_QUEENSIDE;
+  if (move.piece == BLACK_ROOKS && move.from_square == 63) castling_rights &= ~BLACK_KINGSIDE;
+  if (move.captured_piece == WHITE_ROOKS && move.to_square == 0) castling_rights &= ~WHITE_QUEENSIDE;
+  if (move.captured_piece == WHITE_ROOKS && move.to_square == 7) castling_rights &= ~WHITE_KINGSIDE;
+  if (move.captured_piece == BLACK_ROOKS && move.to_square == 56) castling_rights &= ~BLACK_QUEENSIDE;
+  if (move.captured_piece == BLACK_ROOKS && move.to_square == 63) castling_rights &= ~BLACK_KINGSIDE;
 
   en_pessant_square = -1;
   // If a pawn advanced twice, set the board state to allow for a possible en pessant.

@@ -43,7 +43,15 @@ enum Flags {
   ROOK_PROMOTION    = 0b100,
   KNIGHT_PROMOTION  = 0b1000,
   BISHOP_PROMOTION  = 0b10000,
-  QUEEN_PROMOTION   = 0b100000
+  QUEEN_PROMOTION   = 0b100000,
+  CASTLE            = 0b1000000,
+};
+
+enum Castling_rights {
+  WHITE_KINGSIDE  = 0b0001,
+  WHITE_QUEENSIDE = 0b0010,
+  BLACK_KINGSIDE  = 0b0100,
+  BLACK_QUEENSIDE = 0b1000
 };
 
 enum Masks : uint64_t {
@@ -87,11 +95,13 @@ class Board {
     bitboard bitboards[12];
     char piece_chars[12];
     uint8_t player; // 0 = white, 1 = black
+    uint8_t move_count;
     uint8_t en_pessant_square;
     bitboard filemasks[64];
     bitboard rankmasks[64];
     bitboard diagmasks[64];
     bitboard antidiagmasks[64];
+    uint8_t castling_rights;
 
     Board ();
     void print ();
@@ -102,9 +112,11 @@ class Board {
     void generate_bishop_moves (std::vector<Move>* moves);
     void generate_queen_moves (std::vector<Move>* moves);
     void generate_king_moves (std::vector<Move>* moves);
+    void generate_all_moves (std::vector<Move>* moves);
     void make_move (Move move);
     bitboard get_empty_squares ();
     bitboard get_black_pieces ();
     bitboard get_white_pieces ();
     Pieces get_piece_on_square (uint8_t square);
+    bool is_square_attacked (uint8_t square, uint8_t attacking_color);
 };
